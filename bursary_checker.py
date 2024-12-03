@@ -13,11 +13,13 @@ try:
     import requests
 except ImportError:
     install('requests')
+    import requests
 
 try:
     from bs4 import BeautifulSoup
 except ImportError:
     install('beautifulsoup4')
+    from bs4 import BeautifulSoup
 
 # URL of the bursaries page
 url = 'https://www.zabursaries.co.za/computer-science-it-bursaries-south-africa/'
