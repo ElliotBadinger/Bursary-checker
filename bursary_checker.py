@@ -1,6 +1,23 @@
+import sys
+import subprocess
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+
+# Function to install a package if it is not already installed
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# Ensure required libraries are installed
+try:
+    import requests
+except ImportError:
+    install('requests')
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    install('beautifulsoup4')
 
 # URL of the bursaries page
 url = 'https://www.zabursaries.co.za/computer-science-it-bursaries-south-africa/'
