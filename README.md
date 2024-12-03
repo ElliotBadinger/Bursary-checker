@@ -1,62 +1,79 @@
-## How to Check for Bursaries (No Programming Experience Needed!)
+# Bursary Checker
 
-This guide will show you how to use a program that automatically checks for available bursaries and tells you if they are open or closed, even if you have no programming experience.
+This simple Python application helps you find open bursaries in South Africa based on your field of study. It scrapes a website for bursary information and generates a PDF report with open bursaries, their closing dates, and application links.
 
-**1. What you'll need:**
+## Setup Instructions
 
-* **A computer:** Windows, Mac, or Linux will work.
-* **Internet connection:** You'll need to be online to use this program.
-* **Git:**  You'll need Git installed to download the files from the repository.  If you don't have Git, download and install it from [https://git-scm.com/downloads](https://git-scm.com/downloads).
-* **Python:** This is a free programming language. Don't worry, you won't have to write any code!
+This guide assumes you have a basic understanding of using the command line/terminal. If you are completely new to this, you may want to search for tutorials on using the command line for your operating system (Windows, macOS, or Linux).
 
-**2. Installing Python:**
+1. **Install Python:** If you don't have Python installed, download it from [https://www.python.org/downloads/](https://www.python.org/downloads/). Make sure to add Python to your system's PATH during installation.
 
-* **Windows:**
-    1. Go to [https://www.python.org/downloads/](https://www.python.org/downloads/) and download the latest version for Windows.
-    2. Run the downloaded installer.  Make sure to check the box that says "Add Python to PATH" during the installation. This is very important!
-* **Mac:** Python is often already installed on Macs. Open the "Terminal" application (search for it using Spotlight) and type `python3 --version`. If you see a version number (like `Python 3.9.x`), you're good to go.  If not, download the Mac installer from [https://www.python.org/downloads/mac-osx/](https://www.python.org/downloads/mac-osx/).
-* **Linux:** Python is usually pre-installed on Linux. Open your terminal and type `python3 --version`.  If it's not installed, use your distribution's package manager (like `apt-get` on Debian/Ubuntu or `yum` on Fedora/CentOS) to install it (e.g., `sudo apt-get install python3`).
-
-
-**3. Downloading the Bursary Checker:**
-
-1. Open your terminal or command prompt.
-2. Navigate to the directory where you want to save the project.
-3. Clone the repository using the following command:
+2. **Clone the repository:** Open your terminal or command prompt and navigate to the directory where you want to save the project.  Then run:
    ```bash
    git clone https://github.com/ElliotBadinger/Bursary-checker.git
    ```
-4. This will create a new folder with the name of your repository.  Navigate into this folder:
+
+3. **Navigate to the project directory:**
    ```bash
-   cd Bursary-checker  
+   cd Bursary-checker
    ```
 
-**4. Installing the required libraries:**
+4. **Create a virtual environment (recommended):**  This isolates the project's dependencies.
+   ```bash
+   python3 -m venv .venv  # For Windows/macOS/Linux
+   ```
 
-In the same terminal window, run the following command:
+5. **Activate the virtual environment:**
+   - **Windows:** `.venv\Scripts\activate`
+   - **macOS/Linux:** `source .venv/bin/activate`
 
-```bash
-pip install -r requirements.txt
+
+6. **Install required libraries:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Usage
+
+1. **Run the script:** After activating the virtual environment, run the following command in your terminal:
+
+   ```bash
+   python main.py
+   ```
+
+2. **Select your field of study:** The script will present a list of fields of study. Enter the corresponding number to select your field.
+
+3. **Report generation:** The script will scrape the website, check the status of bursaries, and generate a PDF report named `bursary_report_<your_field_of_study>.pdf` in the project directory.  The progress will be displayed on the terminal.
+
+## How it Works
+
+The script uses several Python libraries:
+
+- **`requests`:** To fetch the HTML content of web pages.
+- **`BeautifulSoup`:** To parse the HTML and extract relevant information.
+- **`re` (regular expressions):** To find patterns in text, such as dates.
+- **`datetime`:** To work with dates and times.
+- **`os`:** For file system operations.
+- **`pickle`:** To save and load data to avoid repeated web scraping.
+- **`concurrent.futures`:** To speed up processing by checking multiple bursaries concurrently.
+- **`reportlab`:** To generate the PDF report.
+- **`tqdm`:** To display a progress bar.
+- **`logging`:** To record errors and other information.
+
+
+The script first retrieves a list of bursary links from the target website. Then, it checks each link to determine the bursary's status (open or closed) and extracts details like the closing date. Finally, it generates a PDF report containing information about the open bursaries.  The results are cached for 24 hours to avoid repeated scraping of the same data.
+
+
+## Troubleshooting
+
+- **Errors during installation:** Ensure you have a stable internet connection and that your Python installation is configured correctly.  Try updating `pip`: `pip install --upgrade pip`
+
+- **Script errors:** Check the `bursary_checker.log` file for detailed error messages.
+
+- **Website changes:** The script relies on the structure of the target website.  If the website changes, the script may need to be updated.  Create an issue on GitHub if this happens.
+
+
+## Contributing
+
+Contributions are welcome! Feel free to create pull requests with bug fixes, improvements, or new features.
 ```
-
-**5. Running the Bursary Checker:**
-
-Still in the same terminal window, run this command:
-
-```bash
-python bursary_checker.py
-```
-
-**6. Viewing the results:**
-
-The program will print information to the terminal as it runs. Once it's finished, you'll find new files in the same folder:
-
-* **`bursary_status_distribution.png`:** A pie chart showing how many bursaries are open, closed, or unknown. Open this file with any image viewer.
-* **`bursary_timeline.png`:** A timeline showing when open bursaries close. Open this with an image viewer.
-* **`bursary_report.html`:**  This file contains a complete report with all the details and the visualizations. Open this file with your web browser. This is the most important file!
-
-**7. If something goes wrong:**
-
-* **`pip` is not recognized:** Make sure you added Python to your PATH during installation (step 2).  You might need to restart your computer.
-* **`git` is not recognized:** Make sure Git is correctly installed and added to your system's PATH environment variable.
-* **Other errors:** Check the terminal output for error messages. If you can't resolve the issue, create an issue on the GitHub repository (if it's public) or contact the repository owner.
