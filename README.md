@@ -22,7 +22,11 @@ This guide assumes you have a basic understanding of using the command line/term
    ```bash
    python3 -m venv .venv  # For Windows/macOS/Linux
    ```
-
+   or try ```bash
+      python -m venv .venv
+      ```
+   if the first one fails
+   
 5. **Activate the virtual environment:**
    - **Windows:** `.venv\Scripts\activate`
    - **macOS/Linux:** `source .venv/bin/activate`
@@ -76,4 +80,3 @@ The script first retrieves a list of bursary links from the target website. Then
 ## Contributing
 
 Contributions are welcome! Feel free to create pull requests with bug fixes, improvements, or new features.
-```
