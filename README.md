@@ -22,17 +22,18 @@ This guide assumes you have a basic understanding of using the command line/term
    ```bash
    python3 -m venv .venv  # For Windows/macOS/Linux
    ```
-   or try ```bash
-      python -m venv .venv
+   or try
+   ```bash
+   python -m venv .venv
       ```
    if the first one fails
    
-5. **Activate the virtual environment:**
+6. **Activate the virtual environment:**
    - **Windows:** `.venv\Scripts\activate`
    - **macOS/Linux:** `source .venv/bin/activate`
 
 
-6. **Install required libraries:**
+7. **Install required libraries:**
    ```bash
    pip install -r requirements.txt
    ```
