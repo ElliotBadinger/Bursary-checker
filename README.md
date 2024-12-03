@@ -73,7 +73,7 @@ The script first retrieves a list of bursary links from the target website. Then
 - **Website changes:** The script relies on the structure of the target website.  If the website changes, the script may need to be updated.  Create an issue on GitHub if this happens.
 
 
-## Contributing
+## Contributing 
 
 Contributions are welcome! Feel free to create pull requests with bug fixes, improvements, or new features.
 ```
