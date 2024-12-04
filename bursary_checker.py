@@ -10,7 +10,11 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet
-from tqdm import tqdm
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, TextColumn, BarColumn
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table as RichTable
+from rich import print as rprint
 import time
 import logging
 from urllib3.util.retry import Retry
@@ -19,6 +23,7 @@ from requests.adapters import HTTPAdapter
 class BursaryReportGenerator:
     def __init__(self, base_url):
         self.base_url = base_url
+        self.console = Console()
         self.setup_session()
         self.setup_logging()
         self.cache_file = 'bursary_data_cache.pkl'
@@ -37,6 +42,80 @@ class BursaryReportGenerator:
             'computer science & it': 'computer-science-it',
             'construction & built environment': 'built-environment'
         }
+        self.progress = None
+    
+    def _display_console_summary(self, bursaries):
+        """Display a summary of bursaries in a rich formatted table."""
+        table = RichTable(title="Open Bursaries Summary", show_header=True, header_style="bold magenta")
+        
+        # Add columns
+        table.add_column("Bursary Name", style="cyan", no_wrap=False)
+        table.add_column("Closing Date", style="green")
+        table.add_column("Status", style="yellow")
+        
+        # Add rows
+        for bursary in bursaries:
+            closing_date = (bursary['closing_date'].strftime('%d %B %Y') 
+                          if bursary['closing_date'] else 'Not specified')
+            table.add_row(
+                bursary['name'],
+                closing_date,
+                bursary['status']
+            )
+        
+        self.console.print("\n[bold]Summary of Open Bursaries[/bold]")
+        self.console.print(table)
+        self.console.print(f"\nTotal open bursaries found: [green]{len(bursaries)}[/green]")    
+    def _generate_pdf_report(self, field, bursaries):
+        """Generate PDF report for bursaries."""
+        try:
+            filename = f"{field.lower().replace(' ', '_')}_bursaries_report.pdf"
+            doc = SimpleDocTemplate(filename, pagesize=letter)
+            styles = getSampleStyleSheet()
+            elements = []
+
+            # Add title
+            title = Paragraph(f"Bursary Report - {field}", styles['Heading1'])
+            elements.append(title)
+
+            # Prepare table data
+            data = [['Bursary Name', 'Closing Date', 'Status', 'Details']]
+            for bursary in bursaries:
+                closing_date = (bursary['closing_date'].strftime('%d %B %Y') 
+                              if bursary['closing_date'] else 'Not specified')
+                data.append([
+                    bursary['name'],
+                    closing_date,
+                    bursary['status'],
+                    bursary['details']
+                ])
+
+            # Create and style table
+            table = Table(data, repeatRows=1)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 14),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('WORDWRAP', (0, 0), (-1, -1), True),
+            ]))
+
+            elements.append(table)
+            doc.build(elements)
+            
+            self.console.print(f"[green]Report generated successfully: {filename}")
+            
+        except Exception as e:
+            self.logger.error(f"Error generating PDF report: {e}")
+            self.console.print("[red]Error generating PDF report. Check the log file for details.")
 
     def load_cached_data(self):
         """Load cached bursary data from file if it exists and is not expired."""
@@ -70,17 +149,6 @@ class BursaryReportGenerator:
         except Exception as e:
             self.logger.error(f"Error fetching {url}: {e}")
             return None
-
-    def check_bursaries_concurrent(self, bursary_links):
-        """Process bursary links concurrently using ThreadPoolExecutor."""
-        self.total_links = len(bursary_links)
-        with tqdm(total=self.total_links, desc="Processing bursaries") as pbar:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [
-                    executor.submit(self.check_bursary_status, url, name, pbar)
-                    for name, url in bursary_links
-                ]
-                concurrent.futures.wait(futures)
 
     def setup_logging(self):
         logging.basicConfig(
@@ -123,29 +191,41 @@ class BursaryReportGenerator:
         return True
 
     def parse_date(self, date_str):
+        """Enhanced date parsing to handle more formats."""
         try:
-            # Handle various date formats
+            # Remove any ordinal indicators and extra whitespace
+            date_str = re.sub(r'(?:st|nd|rd|th)', '', date_str).strip()
+            
+            # Try parsing common formats
+            formats = [
+                '%d %B %Y',
+                '%d-%B-%Y',
+                '%d %b %Y',
+                '%Y/%m/%d',
+                '%d/%m/%Y'
+            ]
+            
+            for fmt in formats:
+                try:
+                    return datetime.strptime(date_str, fmt)
+                except ValueError:
+                    continue
+                    
+            # If standard formats fail, try regex patterns
             patterns = [
                 r'(\d{1,2})\s*(January|February|March|April|May|June|July|August|September|October|November|December)\s*(202[45])',
-                r'(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(202[45])',
-                r'(202[45])/(\d{1,2})/(\d{1,2})',
+                r'(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(202[45])'
             ]
             
             for pattern in patterns:
                 match = re.search(pattern, date_str, re.IGNORECASE)
                 if match:
-                    if len(match.groups()) == 3:
-                        if '/' in date_str:
-                            year, month, day = match.groups()
-                            # Convert month number to month name
-                            month = datetime(2000, int(month), 1).strftime('%B')
-                        else:
-                            day, month, year = match.groups()
-                        # Standardize month name
-                        month = month[:3].title()
-                        return datetime.strptime(f"{day} {month} {year}", "%d %b %Y")
+                    day, month, year = match.groups()
+                    month = month[:3].title()
+                    return datetime.strptime(f"{day} {month} {year}", "%d %b %Y")
+                    
             return None
-        except ValueError as e:
+        except Exception as e:
             self.logger.warning(f"Date parsing error: {date_str} - {str(e)}")
             return None
 
@@ -181,180 +261,162 @@ class BursaryReportGenerator:
             self.logger.error(f"Error extracting bursary links from {category_url}: {e}")
             return []
         
-    def check_bursary_status(self, url, name, pbar):
+    def check_bursary_status(self, url, name, task):
+        """Modified to use the task directly instead of progress object."""
         try:
             content = self.get_page_content(url)
             if not content:
-                pbar.update(1)
+                self.progress.update(task, advance=1)
                 return None
 
             soup = BeautifulSoup(content, 'html.parser')
             text_content = soup.get_text().lower()
 
-            # Skip if content contains excluded terms
-            if any(term in text_content for term in self.excluded_terms):
-                pbar.update(1)
-                return None
-
-            # Improved status detection patterns
-            status = "Open"  # Default to Open unless explicitly found to be closed
-            closed_patterns = [
-                r'applications?\s+(?:are\s+)?closed\s+for\s+202[45]',
-                r'deadline\s+has\s+passed\s+for\s+202[45]',
-                r'applications?\s+(?:has|have)\s+ended\s+for\s+202[45]',
-                r'no\s+longer\s+accepting\s+applications?\s+for\s+202[45]'
-            ]
-
-            # Check for explicit closure statements
-            for pattern in closed_patterns:
-                if re.search(pattern, text_content):
-                    status = "Closed"
-                    break
-
-            # Enhanced date extraction
-            date_patterns = [
+            # Look for closing date section more precisely
+            closing_date = None
+            closing_date_patterns = [
                 r'closing date[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
                 r'deadline[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
                 r'applications? close[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
-                r'due date[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
-                r'submit before[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
-                r'last day to apply[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])'
+                r'due date[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])'
             ]
 
-            closing_date = None
-            details = ""
-
-            for pattern in date_patterns:
-                match = re.search(pattern, text_content, re.IGNORECASE)
-                if match:
-                    date_str = match.group(1)
-                    # Remove ordinal indicators before parsing
-                    date_str = re.sub(r'(?:st|nd|rd|th)', '', date_str)
-                    closing_date = self.parse_date(date_str)
-                    if closing_date:
-                        if closing_date < datetime.now():
-                            status = "Closed"
-                        details = f"Closing date: {closing_date.strftime('%d %B %Y')}"
-                        break
-
-            # Look for current year references to determine if bursary is current
-            current_year = datetime.now().year
-            next_year = current_year + 1
-            year_pattern = f"202[45]|{current_year}|{next_year}"
+            # First try to find an explicit closing date section
+            closing_date_section = soup.find(lambda tag: tag.name in ['h2', 'h3', 'h4', 'strong'] and 
+                                          re.search(r'closing date|deadline', tag.get_text().lower()))
             
-            if not re.search(year_pattern, text_content):
-                status = "Closed"  # Mark as closed if no recent year references found
+            if closing_date_section:
+                next_element = closing_date_section.find_next()
+                if next_element:
+                    date_text = next_element.get_text().strip()
+                    closing_date = self.parse_date(date_text)
+
+            # If no closing date found in sections, try regex patterns
+            if not closing_date:
+                for pattern in closing_date_patterns:
+                    match = re.search(pattern, text_content, re.IGNORECASE)
+                    if match:
+                        date_str = match.group(1)
+                        closing_date = self.parse_date(date_str)
+                        if closing_date:
+                            break
+
+            # Determine status
+            status = "Open"
+            if closing_date:
+                if closing_date < datetime.now():
+                    status = "Closed"
+            elif not any(str(year) in text_content for year in [2024, 2025]):
+                status = "Closed"
 
             # Extract requirements
-            requirements_section = soup.find(lambda tag: tag.name in ['div', 'section', 'p'] and 
-                                          any(keyword in tag.get_text().lower() 
-                                              for keyword in ['requirements', 'eligibility', 'criteria']))
+            requirements = "No specific requirements listed"
+            requirements_section = soup.find(lambda tag: tag.name in ['div', 'section'] and 
+                                          re.search(r'requirements|eligibility|criteria', 
+                                                  tag.get_text().lower()))
             if requirements_section:
-                details += "\nKey requirements: " + ' '.join(requirements_section.get_text().split()[:50]) + "..."
+                requirements = ' '.join(requirements_section.get_text().split()[:50]) + "..."
 
             result = {
                 'name': name,
                 'url': url,
                 'status': status,
                 'closing_date': closing_date,
-                'details': details.strip(),
+                'details': f"Requirements: {requirements}",
                 'last_updated': datetime.now()
             }
 
             self.bursary_data.append(result)
-            self.save_cached_data()
-            pbar.update(1)
+            self.progress.update(task, advance=1)
             return result
 
         except Exception as e:
             self.logger.error(f"Error processing {name} at {url}: {e}")
-            pbar.update(1)
+            self.progress.update(task, advance=1)
             return None
 
-    def generate_report(self, field):
-        print(f"\nGenerating report for {field} bursaries...")
-        
-        # Clear previous data before generating new report
-        self.bursary_data = []
-        
+def generate_report(self, field):
+    """Enhanced report generation with Rich formatting and better error handling."""
+    try:
         category_url = self.get_category_url(field)
-        print(f"Checking category URL: {category_url}")
+        self.console.print(Panel(f"[bold]Checking bursaries for: [cyan]{field}"))
+        self.console.print(f"Category URL: [link={category_url}]{category_url}[/link]")
         
         bursary_links = self.extract_bursary_links(category_url)
         
         if not bursary_links:
-            print(f"No bursary links found for {field}. Please check if the category exists.")
+            self.console.print("[red]No bursary links found. Please check if the category exists.")
             return
             
-        print(f"Found {len(bursary_links)} potential bursary links")
-
-        self.check_bursaries_concurrent(bursary_links)
-
-        # Filter out None values and get only open bursaries
+        self.console.print(f"Found [green]{len(bursary_links)}[/green] potential bursary links")
+        
+        # Clear previous data
+        self.bursary_data = []
+        
+        # Create a single Progress instance
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=self.console
+        ) as progress:
+            self.progress = progress
+            task = progress.add_task("[cyan]Processing bursaries...", total=len(bursary_links))
+            
+            # Process bursaries with improved error handling
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = []
+                for name, url in bursary_links:
+                    future = executor.submit(self.check_bursary_status, url, name, task)
+                    futures.append(future)
+                
+                # Handle results as they complete
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        result = future.result()
+                        if result:
+                            self.bursary_data.append(result)
+                    except Exception as e:
+                        self.logger.error(f"Error processing bursary: {str(e)}")
+        
+        # Filter valid and open bursaries
         open_bursaries = [b for b in self.bursary_data if b and b['status'] == 'Open']
         
         if not open_bursaries:
-            print("No open bursaries found. This might be an error - please check the website manually.")
+            self.console.print("[yellow]No open bursaries found for this category.")
             return
 
-        pdf_filename = f"bursary_report_{field.lower().replace(' ', '_')}.pdf"
-        doc = SimpleDocTemplate(pdf_filename, pagesize=letter)
-        styles = getSampleStyleSheet()
-
-        elements = []
-        elements.append(Paragraph(f"Open Bursary Report for {field}", styles["Heading1"]))
-        elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["BodyText"]))
-        elements.append(Paragraph(f"Total bursaries found: {len(open_bursaries)}", styles["BodyText"]))
-        elements.append(Paragraph("", styles["BodyText"]))
-
-        # Sort bursaries by closing date
-        open_bursaries.sort(key=lambda x: (x['closing_date'] or datetime.max))
-
-        data = [['Bursary Name', 'Closing Date', 'Details', 'Link']]
+        # Generate PDF report
+        self._generate_pdf_report(field, open_bursaries)
         
-        for bursary in open_bursaries:
-            safe_url = bursary['url'].replace('&', '&amp;')
-            closing_date_str = (bursary['closing_date'].strftime('%d %B %Y') 
-                              if bursary['closing_date'] else 'Not specified')
-            
-            data.append([
-                Paragraph(bursary['name'], styles["BodyText"]),
-                Paragraph(closing_date_str, styles["BodyText"]),
-                Paragraph(bursary['details'], styles["BodyText"]),
-                Paragraph(f'<link href="{safe_url}">Apply</link>', styles["BodyText"])
-            ])
+        # Save to cache
+        self.save_cached_data()
+        
+        # Display console summary
+        self._display_console_summary(open_bursaries)
 
-        table = Table(data, colWidths=[2.5*inch, 1.5*inch, 2*inch, 1*inch])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.grey),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0,0), (-1,0), 14),
-            ('BOTTOMPADDING', (0,0), (-1,0), 12),
-            ('BACKGROUND', (0,1), (-1,-1), colors.beige),
-            ('GRID', (0,0), (-1,-1), 1, colors.black),
-            ('WORDWRAP', (0,0), (-1,-1), True),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ]))
-
-        elements.append(table)
-        doc.build(elements)
-        print(f"\nReport generated successfully: {pdf_filename}")
+    except Exception as e:
+        self.logger.error(f"Error in generate_report: {str(e)}")
+        self.console.print(f"[red]An error occurred: {str(e)}")
+        self.console.print("[red]Please check the log file for details.")
+    
 
 def main():
     try:
         base_url = "https://www.zabursaries.co.za"
         generator = BursaryReportGenerator(base_url)
+        console = Console()  # Initialize console for main function
 
-        print("Select a field of study:")
+        console.print("[bold cyan]Select a field of study:")
         fields = ["Accounting", "Arts", "Commerce", "Computer Science & IT", 
                  "Construction & Built Environment", "Education", "Engineering", 
                  "General", "Government", "International", "Law", "Medical", 
                  "Postgraduate", "Science"]
         
         for i, field in enumerate(fields, start=1):
-            print(f"{i}. {field}")
+            console.print(f"{i}. {field}")
 
         while True:
             try:
@@ -362,18 +424,18 @@ def main():
                 choice = int(choice)
                 if 1 <= choice <= len(fields):
                     break
-                print(f"Please enter a number between 1 and {len(fields)}")
+                console.print("[red]Please enter a number between 1 and {len(fields)}")
             except ValueError:
-                print("Please enter a valid number")
+                console.print("[red]Please enter a valid number")
 
         field_of_study = fields[choice - 1]
         generator.generate_report(field_of_study)
 
     except KeyboardInterrupt:
-        print("\nOperation cancelled by user")
+        console.print("\n[yellow]Operation cancelled by user")
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
-        print(f"\nAn error occurred. Please check the log file for details.")
+        console.print("[red]An error occurred. Please check the log file for details.")
 
 if __name__ == "__main__":
     main()
