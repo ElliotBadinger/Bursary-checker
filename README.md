@@ -22,13 +22,18 @@ This guide assumes you have a basic understanding of using the command line/term
    ```bash
    python3 -m venv .venv  # For Windows/macOS/Linux
    ```
-
-5. **Activate the virtual environment:**
+   or try
+   ```bash
+   python -m venv .venv
+      ```
+   if the first one fails
+   
+6. **Activate the virtual environment:**
    - **Windows:** `.venv\Scripts\activate`
    - **macOS/Linux:** `source .venv/bin/activate`
 
 
-6. **Install required libraries:**
+7. **Install required libraries:**
    ```bash
    pip install -r requirements.txt
    ```
@@ -73,7 +78,6 @@ The script first retrieves a list of bursary links from the target website. Then
 - **Website changes:** The script relies on the structure of the target website.  If the website changes, the script may need to be updated.  Create an issue on GitHub if this happens.
 
 
-## Contributing 
+## Contributing
 
 Contributions are welcome! Feel free to create pull requests with bug fixes, improvements, or new features.
-```
