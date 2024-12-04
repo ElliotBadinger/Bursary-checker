@@ -1,4 +1,3 @@
-```markdown
 # Bursary Checker
 
 This tool helps you find open bursaries in South Africa based on your field of study.
