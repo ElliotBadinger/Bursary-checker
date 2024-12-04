@@ -21,9 +21,68 @@ class BursaryReportGenerator:
         self.base_url = base_url
         self.setup_session()
         self.setup_logging()
+        self.cache_file = 'bursary_data_cache.pkl'
         self.bursary_data = self.load_cached_data() or []
         self.total_links = 0
         self.processed_links = 0
+        # Define excluded terms for filtering irrelevant content
+        self.excluded_terms = [
+            'payment dates',
+            'sassa payment',
+            'post office',
+            'srd grant',
+            'cash point'
+        ]
+        # Category URL mapping to handle special cases
+        self.category_mapping = {
+            'arts': 'music-and-performing-arts',
+            'computer science & it': 'computer-science-it',
+            'construction & built environment': 'built-environment'
+        }
+
+    def load_cached_data(self):
+        """Load cached bursary data from file if it exists and is not expired."""
+        try:
+            if os.path.exists(self.cache_file):
+                # Check if cache is older than 24 hours
+                if time.time() - os.path.getmtime(self.cache_file) < 86400:  # 24 hours in seconds
+                    with open(self.cache_file, 'rb') as f:
+                        return pickle.load(f)
+                else:
+                    self.logger.info("Cache expired, will fetch fresh data")
+            return []
+        except Exception as e:
+            self.logger.error(f"Error loading cache: {e}")
+            return []
+
+    def save_cached_data(self):
+        """Save current bursary data to cache file."""
+        try:
+            with open(self.cache_file, 'wb') as f:
+                pickle.dump(self.bursary_data, f)
+        except Exception as e:
+            self.logger.error(f"Error saving cache: {e}")
+
+    def get_page_content(self, url):
+        """Fetch page content with retry logic."""
+        try:
+            response = self.session.get(url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            self.logger.error(f"Error fetching {url}: {e}")
+            return None
+
+    def check_bursaries_concurrent(self, bursary_links):
+        """Process bursary links concurrently using ThreadPoolExecutor."""
+        self.total_links = len(bursary_links)
+        with tqdm(total=self.total_links, desc="Processing bursaries") as pbar:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [
+                    executor.submit(self.check_bursary_status, url, name, pbar)
+                    for name, url in bursary_links
+                ]
+                concurrent.futures.wait(futures)
 
     def setup_logging(self):
         logging.basicConfig(
@@ -38,7 +97,8 @@ class BursaryReportGenerator:
         retry_strategy = Retry(
             total=3,
             backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504]  # Removed 404 from retry list
+            status_forcelist=[500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS"]
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("https://", adapter)
@@ -48,68 +108,132 @@ class BursaryReportGenerator:
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         }
 
-    def get_page_content(self, url, timeout=15):
+    def is_valid_bursary_link(self, href, text):
+        # Check if the link contains excluded terms
+        if any(term in (href + text).lower() for term in self.excluded_terms):
+            return False
+        
+        # Verify it's a bursary/scholarship link
+        if not any(keyword in (href.lower() + text.lower()) 
+                  for keyword in ['bursary', 'scholarship', 'fellowship']):
+            return False
+            
+        # Additional validation
+        if 'view-all' in href.lower() or 'news' in href.lower():
+            return False
+            
+        return True
+
+    def parse_date(self, date_str):
         try:
-            response = self.session.get(url, headers=self.headers, timeout=timeout)
-            if response.status_code == 404:
-                self.logger.warning(f"Page not found: {url}")
-                return None
-            response.raise_for_status()
-            time.sleep(0.5)  # Rate limiting
-            return response.text
-        except requests.RequestException as e:
-            self.logger.error(f"Error fetching {url}: {e}")
+            # Handle various date formats
+            patterns = [
+                r'(\d{1,2})\s*(January|February|March|April|May|June|July|August|September|October|November|December)\s*(202[45])',
+                r'(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(202[45])',
+                r'(202[45])/(\d{1,2})/(\d{1,2})',
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, date_str, re.IGNORECASE)
+                if match:
+                    if len(match.groups()) == 3:
+                        if '/' in date_str:
+                            year, month, day = match.groups()
+                            # Convert month number to month name
+                            month = datetime(2000, int(month), 1).strftime('%B')
+                        else:
+                            day, month, year = match.groups()
+                        # Standardize month name
+                        month = month[:3].title()
+                        return datetime.strptime(f"{day} {month} {year}", "%d %b %Y")
             return None
+        except ValueError as e:
+            self.logger.warning(f"Date parsing error: {date_str} - {str(e)}")
+            return None
+
+    def get_category_url(self, field):
+        # Handle special category mappings
+        field_lower = field.lower()
+        if field_lower in self.category_mapping:
+            category_slug = self.category_mapping[field_lower]
+        else:
+            category_slug = field_lower.replace(' & ', '-').replace(' ', '-')
+        
+        return f"{self.base_url.rstrip('/')}/{category_slug}-bursaries-south-africa/"
 
     def check_bursary_status(self, url, name, pbar):
         try:
             content = self.get_page_content(url)
             if not content:
                 pbar.update(1)
-                return {"name": name, "status": "Error", "closing_date": None, "details": "Failed to fetch page"}
+                return None
 
-            # Fixed BeautifulSoup parser initialization
             soup = BeautifulSoup(content, 'html.parser')
             text_content = soup.get_text().lower()
 
-            status_map = {
-                'open': ['applications are open', 'apply now', 'how to apply'],
-                'closed': ['application closed', 'not accepting', 'applications ended']
+            # Skip if content contains excluded terms
+            if any(term in text_content for term in self.excluded_terms):
+                pbar.update(1)
+                return None
+
+            # Enhanced status detection
+            status_indicators = {
+                'open': [
+                    'applications are open',
+                    'apply now',
+                    'how to apply',
+                    'accepting applications',
+                    'applications for 202[45]'
+                ],
+                'closed': [
+                    'applications? closed',
+                    'not accepting',
+                    'applications? (has|have) ended',
+                    'deadline (has )?passed'
+                ]
             }
 
             status = "Unknown"
-            details = ""
-            closing_date = None
-
-            for key, indicators in status_map.items():
-                if any(ind in text_content for ind in indicators):
+            for key, patterns in status_indicators.items():
+                if any(re.search(pattern, text_content) for pattern in patterns):
                     status = key.capitalize()
                     break
 
+            # Enhanced date extraction
             date_patterns = [
-                r'(\d{1,2}\s+[a-z]+\s+202[45])',
-                r'closing\s*date[:\s]*(\d{1,2}\s+[a-z]+\s+202[45])'
+                r'closing date[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])',
+                r'deadline[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])',
+                r'applications close[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])',
+                r'due date[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])'
             ]
+
+            closing_date = None
+            details = ""
 
             for pattern in date_patterns:
                 match = re.search(pattern, text_content, re.IGNORECASE)
                 if match:
-                    try:
-                        date_str = match.group(1)
-                        closing_date = datetime.strptime(date_str, '%d %B %Y')
+                    date_str = match.group(1)
+                    closing_date = self.parse_date(date_str)
+                    if closing_date:
                         if closing_date < datetime.now():
                             status = "Closed"
                         details = f"Closing date: {closing_date.strftime('%d %B %Y')}"
                         break
-                    except ValueError:
-                        self.logger.warning(f"Invalid date format found in {url}: {date_str}")
+
+            # Extract additional details
+            requirements_section = soup.find(lambda tag: tag.name in ['div', 'section'] and 
+                                          any(keyword in tag.get_text().lower() 
+                                              for keyword in ['requirements', 'eligibility', 'criteria']))
+            if requirements_section:
+                details += "\nKey requirements: " + ' '.join(requirements_section.get_text().split()[:50]) + "..."
 
             result = {
                 'name': name,
                 'url': url,
                 'status': status,
                 'closing_date': closing_date,
-                'details': details,
+                'details': details.strip(),
                 'last_updated': datetime.now()
             }
 
@@ -121,76 +245,39 @@ class BursaryReportGenerator:
         except Exception as e:
             self.logger.error(f"Error processing {name} at {url}: {e}")
             pbar.update(1)
-            return {"name": name, "status": "Error", "closing_date": None, "details": str(e)}
+            return None
 
     def extract_bursary_links(self, category_url):
         content = self.get_page_content(category_url)
         if not content:
             return []
 
-        # Fixed BeautifulSoup parser initialization
         soup = BeautifulSoup(content, 'html.parser')
         links = []
 
-        # Updated URL handling
-        category_base = self.base_url.rstrip('/') + '/bursaries-south-africa/'
-        
         for a in soup.find_all('a', href=True):
             href = a['href']
             text = a.text.strip()
-            if any(keyword in (href.lower() + text.lower()) 
-                   for keyword in ['bursary', 'scholarship', 'fellowship']):
-                if href.startswith('/'):
-                    href = f'{self.base_url.rstrip("/")}{href}'
-                elif not href.startswith(('http://', 'https://')):
-                    href = f'{self.base_url.rstrip("/")}/{href}'
-                if href.startswith(self.base_url) and text:
-                    links.append((text, href))
-        
-        return list(set(links))  # Remove duplicates
-
-    def check_bursaries_concurrent(self, links, max_workers=5):
-        self.total_links = len(links)
-        with tqdm(total=self.total_links, desc="Processing bursaries") as pbar:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(self.check_bursary_status, url, name, pbar): (name, url) 
-                    for name, url in links
-                }
+            
+            if not self.is_valid_bursary_link(href, text):
+                continue
                 
-                for future in concurrent.futures.as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception as exc:
-                        name, url = futures[future]
-                        self.logger.error(f'Error processing {name} at {url}: {exc}')
-
-    def load_cached_data(self):
-        try:
-            if os.path.exists('bursary_data.pkl'):
-                with open('bursary_data.pkl', 'rb') as f:
-                    data = pickle.load(f)
-                current_time = datetime.now()
-                data = [entry for entry in data if 
-                       'last_updated' in entry and 
-                       (current_time - entry['last_updated']).total_seconds() < 86400]
-                return data
-        except Exception as e:
-            self.logger.error(f"Error loading cached data: {e}")
-        return None
-
-    def save_cached_data(self):
-        try:
-            with open('bursary_data.pkl', 'wb') as f:
-                pickle.dump(self.bursary_data, f)
-        except Exception as e:
-            self.logger.error(f"Error saving cached data: {e}")
+            if href.startswith('/'):
+                href = f'{self.base_url.rstrip("/")}{href}'
+            elif not href.startswith(('http://', 'https://')):
+                href = f'{self.base_url.rstrip("/")}/{href}'
+                
+            if href.startswith(self.base_url) and text:
+                links.append((text, href))
+        
+        return list(set(links))
 
     def generate_report(self, field):
         print(f"\nGenerating report for {field} bursaries...")
         
-        # Updated URL construction
-        category_url = f"{self.base_url.rstrip('/')}/{field.lower().replace(' ', '-')}-bursaries-south-africa/"
+        category_url = self.get_category_url(field)
+        print(f"Checking category URL: {category_url}")
+        
         bursary_links = self.extract_bursary_links(category_url)
         
         if not bursary_links:
@@ -201,7 +288,8 @@ class BursaryReportGenerator:
 
         self.check_bursaries_concurrent(bursary_links)
 
-        open_bursaries = [b for b in self.bursary_data if b['status'] == 'Open']
+        # Filter out None values and get only open bursaries
+        open_bursaries = [b for b in self.bursary_data if b and b['status'] == 'Open']
         
         if not open_bursaries:
             print("No open bursaries found.")
@@ -217,19 +305,22 @@ class BursaryReportGenerator:
         elements.append(Paragraph(f"Total bursaries found: {len(open_bursaries)}", styles["BodyText"]))
         elements.append(Paragraph("", styles["BodyText"]))
 
+        # Sort bursaries by closing date
+        open_bursaries.sort(key=lambda x: (x['closing_date'] or datetime.max))
+
         data = [['Bursary Name', 'Closing Date', 'Details', 'Link']]
         
         for bursary in open_bursaries:
-            try:
-                safe_url = bursary['url'].replace('&', '&amp;')
-                data.append([
-                    Paragraph(bursary['name'], styles["BodyText"]),
-                    Paragraph(bursary['closing_date'].strftime('%d %B %Y') if bursary['closing_date'] else 'Not specified', styles["BodyText"]),
-                    Paragraph(bursary['details'], styles["BodyText"]),
-                    Paragraph(f'<link href="{safe_url}">Apply</link>', styles["BodyText"])
-                ])
-            except Exception as e:
-                self.logger.error(f"Error processing bursary {bursary['name']}: {e}")
+            safe_url = bursary['url'].replace('&', '&amp;')
+            closing_date_str = (bursary['closing_date'].strftime('%d %B %Y') 
+                              if bursary['closing_date'] else 'Not specified')
+            
+            data.append([
+                Paragraph(bursary['name'], styles["BodyText"]),
+                Paragraph(closing_date_str, styles["BodyText"]),
+                Paragraph(bursary['details'], styles["BodyText"]),
+                Paragraph(f'<link href="{safe_url}">Apply</link>', styles["BodyText"])
+            ])
 
         table = Table(data, colWidths=[2.5*inch, 1.5*inch, 2*inch, 1*inch])
         table.setStyle(TableStyle([
@@ -249,9 +340,11 @@ class BursaryReportGenerator:
         doc.build(elements)
         print(f"\nReport generated successfully: {pdf_filename}")
 
+    # Rest of the methods remain the same...
+
 def main():
     try:
-        base_url = "https://www.zabursaries.co.za/"
+        base_url = "https://www.zabursaries.co.za"
         generator = BursaryReportGenerator(base_url)
 
         print("Select a field of study:")

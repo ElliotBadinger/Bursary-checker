@@ -1,0 +1,37 @@
+2024-12-03 20:38:40,344 - WARNING - Page not found: https://www.zabursaries.co.za/arts-bursaries-south-africa/
+2024-12-03 20:40:38,210 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/sbf-high-school-scholarship/: 6 in 2024
+2024-12-03 20:41:19,598 - WARNING - Invalid date format found in https://www.zabursaries.co.za/tag/2025bursary/: 25 bursaries 2025
+2024-12-03 20:41:38,855 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/spirit-education-foundation-trust-high-school-scholarship/: 6 in 2024
+2024-12-03 20:42:13,189 - WARNING - Invalid date format found in https://www.zabursaries.co.za/science-bursaries-south-africa/financial-sector-conduct-authority-fsca-bursary/: 22 to 2025
+2024-12-03 20:42:46,103 - WARNING - Page not found: https://www.zabursaries.co.za/ https://www.zabursaries.co.za/general-bursaries-south-africa/neet-national-economic-education-trust-bursary/
+2024-12-03 20:43:09,331 - WARNING - Invalid date format found in https://www.zabursaries.co.za/bursary-news/: 25 bursaries 2025
+2024-12-03 20:43:19,586 - WARNING - Invalid date format found in https://www.zabursaries.co.za/music-and-performing-arts-bursaries-south-africa/south-african-reserve-bank-scholarship/: 23 and 2024
+2024-12-03 20:43:21,898 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/saibpp-bursary/: 21 to 2025
+2024-12-03 20:43:38,490 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/kmf-high-school-scholarship/: 6 in 2024
+2024-12-03 20:43:59,552 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /universities/boston-media-house-bursary-competition/
+2024-12-03 20:44:05,975 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /engineering-bursaries-south-africa/assmang-manganese-bursary/
+2024-12-03 20:44:27,003 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/elsen-academy-legacy-trust-high-school-scholarship/: 10 in 2024
+2024-12-03 20:44:50,584 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/investec-high-school-bursary/: 12 in 2025
+2024-12-03 20:45:14,911 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /science-bursaries-south-africa/impala-platinum-implats-bursary/
+2024-12-03 20:45:58,851 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /government-bursaries-south-africa/eastern-cape-dept-of-roads-and-public-works-bursary/
+2024-12-03 20:45:58,853 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /science-bursaries-south-africa/saafost-bursary/
+2024-12-03 20:46:00,852 - WARNING - Invalid date format found in https://www.zabursaries.co.za/bursary-news/sassa-payment-dates-2024-2025/: 24 and 2025
+2024-12-03 20:46:10,026 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/saibpp-bursary/: 21 to 2025
+2024-12-03 20:46:30,700 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/barberton-mines-high-school-scholarship/: 9 in 2025
+2024-12-03 20:46:59,008 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/oprah-winfrey-leadership-academy-for-girls-owlag-scholarship/: 9 in 2024
+2024-12-03 20:47:00,818 - WARNING - Invalid date format found in https://www.zabursaries.co.za/bursary-news/: 25 bursaries 2025
+2024-12-03 20:47:02,344 - WARNING - Invalid date format found in https://www.zabursaries.co.za/mba-postgraduate/firstrand-foundation-honours-bursary/: 22 and 2024
+2024-12-03 20:47:07,153 - WARNING - Invalid date format found in https://www.zabursaries.co.za/general-bursaries-south-africa/aisct-high-school-scholarship/: 10 in 2024
+2024-12-03 21:46:49,736 - ERROR - Unexpected error: 'BursaryReportGenerator' object has no attribute 'load_cached_data'
+2024-12-03 21:47:27,537 - ERROR - Unexpected error: 'BursaryReportGenerator' object has no attribute 'load_cached_data'
+2024-12-03 22:10:55,236 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /general-bursaries-south-africa/toughees-bursary-competition/
+2024-12-03 22:10:55,239 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /science-bursaries-south-africa/beefmaster-group-bursary/
+2024-12-03 22:11:41,720 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /general-bursaries-south-africa/foodbev-seta-bursary/
+2024-12-03 22:11:41,720 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /general-bursaries-south-africa/south-african-road-federation-bursary/
+2024-12-03 22:11:41,752 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /engineering-bursaries-south-africa/vgi-consulting-bursary/
+2024-12-03 22:11:41,752 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /general-bursaries-south-africa/access-trust-bursary/
+2024-12-03 22:15:01,396 - ERROR - Error fetching https://www.zabursaries.co.za/it-bursaries-south-africa/: 404 Client Error: Not Found for url: https://www.zabursaries.co.za/it-bursaries-south-africa/
+2024-12-03 23:07:06,124 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'RemoteDisconnected('Remote end closed connection without response')': /international-scholarships-bursaries-south-africa/goethe-talents-scholarship/
+2024-12-03 23:11:06,298 - ERROR - Error fetching https://www.zabursaries.co.za/ https://www.zabursaries.co.za/general-bursaries-south-africa/neet-national-economic-education-trust-bursary/: 404 Client Error: Not Found for url: https://www.zabursaries.co.za/%20https:/www.zabursaries.co.za/general-bursaries-south-africa/neet-national-economic-education-trust-bursary/
+2024-12-03 23:22:47,423 - ERROR - Unexpected error: 'BursaryReportGenerator' object has no attribute 'generate_report'
+2024-12-03 23:25:05,128 - ERROR - Unexpected error: 'BursaryReportGenerator' object has no attribute 'extract_bursary_links'
