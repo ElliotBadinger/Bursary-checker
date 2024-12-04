@@ -25,15 +25,13 @@ class BursaryReportGenerator:
         self.bursary_data = self.load_cached_data() or []
         self.total_links = 0
         self.processed_links = 0
-        # Define excluded terms for filtering irrelevant content
+        # Updated excluded terms to be more specific
         self.excluded_terms = [
-            'payment dates',
-            'sassa payment',
-            'post office',
-            'srd grant',
-            'cash point'
+            'sassa payment dates',
+            'srd grant payment',
+            'post office payment',
+            'cash point location'
         ]
-        # Category URL mapping to handle special cases
         self.category_mapping = {
             'arts': 'music-and-performing-arts',
             'computer science & it': 'computer-science-it',
@@ -161,6 +159,28 @@ class BursaryReportGenerator:
         
         return f"{self.base_url.rstrip('/')}/{category_slug}-bursaries-south-africa/"
 
+    def extract_bursary_links(self, category_url):
+        """Extracts bursary links from the category page."""
+        try:
+            content = self.get_page_content(category_url)
+            if not content:
+                return []
+
+            soup = BeautifulSoup(content, 'html.parser')
+            bursary_links = []
+
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                text = link.text.strip()
+                if self.is_valid_bursary_link(href, text):
+                    full_url = href if href.startswith('http') else self.base_url + href
+                    bursary_links.append((text, full_url))
+
+            return bursary_links
+        except Exception as e:
+            self.logger.error(f"Error extracting bursary links from {category_url}: {e}")
+            return []
+        
     def check_bursary_status(self, url, name, pbar):
         try:
             content = self.get_page_content(url)
@@ -176,35 +196,29 @@ class BursaryReportGenerator:
                 pbar.update(1)
                 return None
 
-            # Enhanced status detection
-            status_indicators = {
-                'open': [
-                    'applications are open',
-                    'apply now',
-                    'how to apply',
-                    'accepting applications',
-                    'applications for 202[45]'
-                ],
-                'closed': [
-                    'applications? closed',
-                    'not accepting',
-                    'applications? (has|have) ended',
-                    'deadline (has )?passed'
-                ]
-            }
+            # Improved status detection patterns
+            status = "Open"  # Default to Open unless explicitly found to be closed
+            closed_patterns = [
+                r'applications?\s+(?:are\s+)?closed\s+for\s+202[45]',
+                r'deadline\s+has\s+passed\s+for\s+202[45]',
+                r'applications?\s+(?:has|have)\s+ended\s+for\s+202[45]',
+                r'no\s+longer\s+accepting\s+applications?\s+for\s+202[45]'
+            ]
 
-            status = "Unknown"
-            for key, patterns in status_indicators.items():
-                if any(re.search(pattern, text_content) for pattern in patterns):
-                    status = key.capitalize()
+            # Check for explicit closure statements
+            for pattern in closed_patterns:
+                if re.search(pattern, text_content):
+                    status = "Closed"
                     break
 
             # Enhanced date extraction
             date_patterns = [
-                r'closing date[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])',
-                r'deadline[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])',
-                r'applications close[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])',
-                r'due date[:\s]*(\d{1,2}\s+[a-zA-Z]+\s+202[45])'
+                r'closing date[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
+                r'deadline[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
+                r'applications? close[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
+                r'due date[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
+                r'submit before[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])',
+                r'last day to apply[:\s]*(\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+\s+202[45])'
             ]
 
             closing_date = None
@@ -214,6 +228,8 @@ class BursaryReportGenerator:
                 match = re.search(pattern, text_content, re.IGNORECASE)
                 if match:
                     date_str = match.group(1)
+                    # Remove ordinal indicators before parsing
+                    date_str = re.sub(r'(?:st|nd|rd|th)', '', date_str)
                     closing_date = self.parse_date(date_str)
                     if closing_date:
                         if closing_date < datetime.now():
@@ -221,8 +237,16 @@ class BursaryReportGenerator:
                         details = f"Closing date: {closing_date.strftime('%d %B %Y')}"
                         break
 
-            # Extract additional details
-            requirements_section = soup.find(lambda tag: tag.name in ['div', 'section'] and 
+            # Look for current year references to determine if bursary is current
+            current_year = datetime.now().year
+            next_year = current_year + 1
+            year_pattern = f"202[45]|{current_year}|{next_year}"
+            
+            if not re.search(year_pattern, text_content):
+                status = "Closed"  # Mark as closed if no recent year references found
+
+            # Extract requirements
+            requirements_section = soup.find(lambda tag: tag.name in ['div', 'section', 'p'] and 
                                           any(keyword in tag.get_text().lower() 
                                               for keyword in ['requirements', 'eligibility', 'criteria']))
             if requirements_section:
@@ -247,33 +271,11 @@ class BursaryReportGenerator:
             pbar.update(1)
             return None
 
-    def extract_bursary_links(self, category_url):
-        content = self.get_page_content(category_url)
-        if not content:
-            return []
-
-        soup = BeautifulSoup(content, 'html.parser')
-        links = []
-
-        for a in soup.find_all('a', href=True):
-            href = a['href']
-            text = a.text.strip()
-            
-            if not self.is_valid_bursary_link(href, text):
-                continue
-                
-            if href.startswith('/'):
-                href = f'{self.base_url.rstrip("/")}{href}'
-            elif not href.startswith(('http://', 'https://')):
-                href = f'{self.base_url.rstrip("/")}/{href}'
-                
-            if href.startswith(self.base_url) and text:
-                links.append((text, href))
-        
-        return list(set(links))
-
     def generate_report(self, field):
         print(f"\nGenerating report for {field} bursaries...")
+        
+        # Clear previous data before generating new report
+        self.bursary_data = []
         
         category_url = self.get_category_url(field)
         print(f"Checking category URL: {category_url}")
@@ -292,7 +294,7 @@ class BursaryReportGenerator:
         open_bursaries = [b for b in self.bursary_data if b and b['status'] == 'Open']
         
         if not open_bursaries:
-            print("No open bursaries found.")
+            print("No open bursaries found. This might be an error - please check the website manually.")
             return
 
         pdf_filename = f"bursary_report_{field.lower().replace(' ', '_')}.pdf"
@@ -339,8 +341,6 @@ class BursaryReportGenerator:
         elements.append(table)
         doc.build(elements)
         print(f"\nReport generated successfully: {pdf_filename}")
-
-    # Rest of the methods remain the same...
 
 def main():
     try:
