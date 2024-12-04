@@ -49,7 +49,3 @@ Choose your field of study, and the script will generate a PDF report named `bur
 
 Contributions are welcome! Fork the repository and submit a pull request.
 
-## License
-
-[MIT](LICENSE)
-```
